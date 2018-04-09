@@ -24,6 +24,10 @@ void saveToFile(vector<string> order);
 vector<string> openFromFile();
 void clearFile();
 
+void saveToCSV(vector<string> order);
+vector<string> openFromCSV();
+void clearCSV();
+
 /* 
 * 返回应用的ApiVer、Appid，打包后将不会调用
 */
@@ -93,12 +97,12 @@ CQEVENT(int32_t, __eventDisable, 0)() {
 */
 CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t fromQQ, const char *msg, int32_t font) {
 	if(strcmp(msg,"获取订单")==0) {		
-		if (fromQQ != 914349145) {
-			CQ_sendPrivateMsg(ac, fromQQ, "无权限");
-			return EVENT_IGNORE;
-		}
+		//if (fromQQ != 914349145) {
+		//	CQ_sendPrivateMsg(ac, fromQQ, "无权限");
+		//	return EVENT_IGNORE;
+		//}
 		CQ_sendPrivateMsg(ac, fromQQ, "今日订单如下：");
-		vector<string> s = openFromFile();
+		vector<string> s = openFromCSV();
 		vector<string>::iterator iter = s.begin();
 		while (iter != s.end()) {
 			CQ_sendPrivateMsg(ac, fromQQ, (*iter).c_str());
@@ -107,7 +111,8 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 		return EVENT_BLOCK;
 	}
 	else if (strcmp(msg, "清空订单") == 0) {
-		clearFile();
+		CQ_sendPrivateMsg(ac, fromQQ, "删除成功");
+		clearCSV();
 	}
 	//如果要回复消息，请调用酷Q方法发送，并且这里 return EVENT_BLOCK - 截断本条消息，不再继续处理  注意：应用优先级设置为"最高"(10000)时，不得使用本返回值
 	//如果不回复消息，交由之后的应用/过滤器处理，这里 return EVENT_IGNORE - 忽略本条消息
@@ -131,11 +136,11 @@ CQEVENT(int32_t, __eventGroupMsg, 36)(int32_t subType, int32_t msgId, int64_t fr
 
 	vector<string> tokens;  // vector
 	tokens.push_back(to_string(fromQQ));
-	tokens.push_back(":");
+	//tokens.push_back(":");
 	while (ss >> buf)
 		tokens.push_back(buf);
-	saveToFile(tokens);
-
+	//saveToFile(tokens);
+	saveToCSV(tokens);
 	//vector<string>::iterator iter = tokens.begin();
 	//while (iter != tokens.end()) {
 	//	CQ_sendGroupMsg(ac, fromGroup, (*iter).c_str());
@@ -295,5 +300,78 @@ void clearFile()
 	char fileName[100] = "data/order/";
 	strcat(fileName, tmp);
 	strcat(fileName, ".txt");
+	remove(fileName);
+}
+
+void saveToCSV(vector<string> order)
+{
+	time_t rawtime;
+	time(&rawtime);
+	char tmp[20];
+	strftime(tmp, 20, "%Y-%m-%d", localtime(&rawtime));
+	//cout << tmp << endl;
+	char fileName[100] = "data/order/";
+	strcat(fileName, tmp);
+	strcat(fileName, ".csv");
+	ofstream file(fileName, ios::app);
+	vector<string>::iterator iter = order.begin();
+	while (iter != order.end()) {
+		file << *iter << ",";
+		iter++;
+	}
+	file << endl;
+	file.close();
+}
+//删除字符串中空格，制表符tab等无效字符  
+string Trim(string& str)
+{
+	//str.find_first_not_of(" \t\r\n"),在字符串str中从索引0开始，返回首次不匹配"\t\r\n"的位置  
+	str.erase(0, str.find_first_not_of(" \t\r\n"));
+	str.erase(str.find_last_not_of(" \t\r\n") + 1);
+	return str;
+}
+
+vector<string> openFromCSV()
+{
+	vector<string> order;
+	time_t rawtime;
+	time(&rawtime);
+	char tmp[20];
+	strftime(tmp, 20, "%Y-%m-%d", localtime(&rawtime));
+	//cout << tmp << endl;
+	char fileName[100] = "data/order/";
+	strcat(fileName, tmp);
+	strcat(fileName, ".csv");
+
+	ifstream file(fileName);
+	vector<string> orders; //声明一个字符串向量  
+	string line;
+	while (getline(file, line))   //整行读取，换行符“\n”区分，遇到文件尾标志eof终止读取  
+	{
+		istringstream sin(line); //将整行字符串line读入到字符串流istringstream中  
+		
+		string field;
+		string order;
+		getline(sin, field, ',');
+		order = field + ":";
+		while (getline(sin, field, ',')) //将字符串流sin中的字符读入到field字符串中，以逗号为分隔符  
+		{
+			order += " " + field;
+		}
+		orders.push_back(order); //将刚刚读取的字符串添加到向量orders中  
+	}
+	return orders;
+}
+
+void clearCSV()
+{
+	time_t rawtime;
+	time(&rawtime);
+	char tmp[20];
+	strftime(tmp, 20, "%Y-%m-%d", localtime(&rawtime));
+	//cout << tmp << endl;
+	char fileName[100] = "data/order/";
+	strcat(fileName, tmp);
+	strcat(fileName, ".csv");
 	remove(fileName);
 }
