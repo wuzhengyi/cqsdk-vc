@@ -8,12 +8,21 @@
 #include "string"
 #include "cqp.h"
 #include "appmain.h" //应用AppID等信息，请正确填写，否则酷Q可能无法加载
+#include <vector>
+#include <string>
+#include <sstream>
+#include <iostream>
+#include <fstream>
+#include <time.h>
+#include <cstdio>
 
 using namespace std;
 
 int ac = -1; //AuthCode 调用酷Q的方法时需要用到
 bool enabled = false;
-
+void saveToFile(vector<string> order);
+vector<string> openFromFile();
+void clearFile();
 
 /* 
 * 返回应用的ApiVer、Appid，打包后将不会调用
@@ -83,7 +92,23 @@ CQEVENT(int32_t, __eventDisable, 0)() {
 * subType 子类型，11/来自好友 1/来自在线状态 2/来自群 3/来自讨论组
 */
 CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t fromQQ, const char *msg, int32_t font) {
-
+	if(strcmp(msg,"获取订单")==0) {		
+		if (fromQQ != 914349145) {
+			CQ_sendPrivateMsg(ac, fromQQ, "无权限");
+			return EVENT_IGNORE;
+		}
+		CQ_sendPrivateMsg(ac, fromQQ, "今日订单如下：");
+		vector<string> s = openFromFile();
+		vector<string>::iterator iter = s.begin();
+		while (iter != s.end()) {
+			CQ_sendPrivateMsg(ac, fromQQ, (*iter).c_str());
+			iter++;
+		}
+		return EVENT_BLOCK;
+	}
+	else if (strcmp(msg, "清空订单") == 0) {
+		clearFile();
+	}
 	//如果要回复消息，请调用酷Q方法发送，并且这里 return EVENT_BLOCK - 截断本条消息，不再继续处理  注意：应用优先级设置为"最高"(10000)时，不得使用本返回值
 	//如果不回复消息，交由之后的应用/过滤器处理，这里 return EVENT_IGNORE - 忽略本条消息
 	return EVENT_IGNORE;
@@ -94,8 +119,30 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 * Type=2 群消息
 */
 CQEVENT(int32_t, __eventGroupMsg, 36)(int32_t subType, int32_t msgId, int64_t fromGroup, int64_t fromQQ, const char *fromAnonymous, const char *msg, int32_t font) {
+	time_t rawtime;
+	time(&rawtime);
+	char fileName[20];
+	strftime(fileName, 20, "%Y-%m-%d", localtime(&rawtime));
+	CQ_sendGroupMsg(ac, fromGroup, fileName);
+	
+	string s = msg;
+	string buf;
+	stringstream ss(s);  // 字符流ss 
 
-	return EVENT_IGNORE; //关于返回值说明, 见“_eventPrivateMsg”函数
+	vector<string> tokens;  // vector
+	tokens.push_back(to_string(fromQQ));
+	tokens.push_back(":");
+	while (ss >> buf)
+		tokens.push_back(buf);
+	saveToFile(tokens);
+
+	//vector<string>::iterator iter = tokens.begin();
+	//while (iter != tokens.end()) {
+	//	CQ_sendGroupMsg(ac, fromGroup, (*iter).c_str());
+	//	iter++;
+	//}
+	
+	return EVENT_BLOCK; //关于返回值说明, 见“_eventPrivateMsg”函数
 }
 
 
@@ -193,4 +240,60 @@ CQEVENT(int32_t, __menuA, 0)() {
 CQEVENT(int32_t, __menuB, 0)() {
 	MessageBoxA(NULL, "这是menuB，在这里载入窗口，或者进行其他工作。", "" ,0);
 	return 0;
+}
+
+void saveToFile(vector<string> order)
+{
+	time_t rawtime;
+	time(&rawtime);
+	char tmp[20];
+	strftime(tmp, 20, "%Y-%m-%d", localtime(&rawtime));
+	//cout << tmp << endl;
+	char fileName[100] = "data/order/";
+	strcat(fileName, tmp);
+	strcat(fileName, ".txt");
+	ofstream file(fileName, ios::app | ios::out);
+	vector<string>::iterator iter = order.begin();
+	while (iter != order.end()) {
+		file << *iter << " ";
+		iter++;
+	}
+	file << "\n";
+	file.close();
+}
+
+vector<string> openFromFile()
+{
+	vector<string> order;
+	time_t rawtime;
+	time(&rawtime);
+	char tmp[20];
+	strftime(tmp, 20, "%Y-%m-%d", localtime(&rawtime));
+	//cout << tmp << endl;
+	char fileName[100] = "data/order/";
+	strcat(fileName, tmp);
+	strcat(fileName, ".txt");
+
+	ifstream file(fileName);
+	vector<string>::iterator iter = order.begin();
+	string  s;
+	while (getline(file, s))
+	{
+		order.push_back(s);
+	}
+	file.close();
+	return order;
+}
+
+void clearFile()
+{
+	time_t rawtime;
+	time(&rawtime);
+	char tmp[20];
+	strftime(tmp, 20, "%Y-%m-%d", localtime(&rawtime));
+	//cout << tmp << endl;
+	char fileName[100] = "data/order/";
+	strcat(fileName, tmp);
+	strcat(fileName, ".txt");
+	remove(fileName);
 }
