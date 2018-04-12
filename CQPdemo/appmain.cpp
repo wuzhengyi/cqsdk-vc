@@ -15,6 +15,9 @@
 #include <fstream>
 #include <time.h>
 #include <cstdio>
+#include <direct.h>
+#include <stdlib.h>
+#include <memory>
 
 using namespace std;
 
@@ -25,8 +28,9 @@ vector<string> openFromFile();
 void clearFile();
 
 void saveToCSV(vector<string> order);
-vector<string> openFromCSV();
-void clearCSV();
+vector<string> openFromCSV(const char * group);
+void clearCSV(const char * group);
+int CheckDir(char* Dir);
 
 /* 
 * 返回应用的ApiVer、Appid，打包后将不会调用
@@ -96,13 +100,18 @@ CQEVENT(int32_t, __eventDisable, 0)() {
 * subType 子类型，11/来自好友 1/来自在线状态 2/来自群 3/来自讨论组
 */
 CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t fromQQ, const char *msg, int32_t font) {
-	if(strcmp(msg,"获取订单")==0) {		
+	stringstream ss(msg);  // 字符流ss 
+	string buf;
+	ss >> buf;
+	if(buf.compare("获取订单")==0) {		
 		//if (fromQQ != 914349145) {
 		//	CQ_sendPrivateMsg(ac, fromQQ, "无权限");
 		//	return EVENT_IGNORE;
 		//}
-		CQ_sendPrivateMsg(ac, fromQQ, "今日订单如下：");
-		vector<string> s = openFromCSV();
+		ss >> buf;
+		vector<string> s = openFromCSV(buf.c_str());
+		buf += "订单如下:";
+		CQ_sendPrivateMsg(ac, fromQQ, buf.c_str());	
 		vector<string>::iterator iter = s.begin();
 		while (iter != s.end()) {
 			CQ_sendPrivateMsg(ac, fromQQ, (*iter).c_str());
@@ -110,9 +119,11 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 		}
 		return EVENT_BLOCK;
 	}
-	else if (strcmp(msg, "清空订单") == 0) {
+	else if (buf.compare("清空订单") == 0) {
+		ss >> buf;
+		clearCSV(buf.c_str());
 		CQ_sendPrivateMsg(ac, fromQQ, "删除成功");
-		clearCSV();
+		
 	}
 	//如果要回复消息，请调用酷Q方法发送，并且这里 return EVENT_BLOCK - 截断本条消息，不再继续处理  注意：应用优先级设置为"最高"(10000)时，不得使用本返回值
 	//如果不回复消息，交由之后的应用/过滤器处理，这里 return EVENT_IGNORE - 忽略本条消息
@@ -128,24 +139,54 @@ CQEVENT(int32_t, __eventGroupMsg, 36)(int32_t subType, int32_t msgId, int64_t fr
 	time(&rawtime);
 	char fileName[20];
 	strftime(fileName, 20, "%Y-%m-%d", localtime(&rawtime));
-	CQ_sendGroupMsg(ac, fromGroup, fileName);
-	
+	//CQ_sendGroupMsg(ac, fromGroup, fileName);	
 	string s = msg;
 	string buf;
 	stringstream ss(s);  // 字符流ss 
-
 	vector<string> tokens;  // vector
-	tokens.push_back(to_string(fromQQ));
-	//tokens.push_back(":");
-	while (ss >> buf)
-		tokens.push_back(buf);
-	//saveToFile(tokens);
-	saveToCSV(tokens);
-	//vector<string>::iterator iter = tokens.begin();
-	//while (iter != tokens.end()) {
-	//	CQ_sendGroupMsg(ac, fromGroup, (*iter).c_str());
-	//	iter++;
-	//}
+	ss >> buf;
+	if (buf.compare("买") != 0 && buf.compare("卖") != 0) {
+		CQ_sendGroupMsg(ac, fromGroup, "首字符不匹配\n请按照格式发送,空白项填写'无'，中间有空格。\
+			\n\"买/卖 [型号] [电压等级] [规格] [数量] [电话] [到货地点] [价格] [备注]\"\n\
+			例如\"买 yjv22 35v 50米 3*300 188****5175 江苏省 面谈 无\"");
+		return EVENT_IGNORE;
+	}
+	if (buf.compare("卖") == 0) {
+		tokens.push_back(to_string(fromGroup)+"卖");
+		tokens.push_back(to_string(fromQQ));
+		while (ss >> buf)
+			tokens.push_back(buf);
+		if (tokens.size() < 7 || tokens.size()>10) {
+			CQ_sendGroupMsg(ac, fromGroup, "标签个数不匹配\n请按照格式发送,空白项填写'无'，中间有空格。\
+			\n\"买/卖 [型号] [电压等级] [规格] [数量] [电话] [到货地点] [价格] [备注]\"\n\
+			例如\"买 yjv22 35v 50米 3*300 188****5175 江苏省 面谈 无\"");
+			return EVENT_IGNORE;
+		}
+		tokens.push_back("无");
+		tokens.push_back("无");
+		tokens.push_back("无");
+		tokens.push_back("无");
+		tokens[10] = msg;
+		saveToCSV(tokens);
+	}
+	else {
+		tokens.push_back(to_string(fromGroup));
+		tokens.push_back(to_string(fromQQ));
+		while (ss >> buf)
+			tokens.push_back(buf);
+		if (tokens.size() < 7 || tokens.size()>10) {
+			CQ_sendGroupMsg(ac, fromGroup, "标签个数不匹配\n请按照格式发送,空白项填写'无'，中间有空格。\
+			\n\"买/卖 [型号] [电压等级] [规格] [数量] [电话] [到货地点] [价格] [备注]\"\n\
+			例如\"买 yjv22 35v 50米 3*300 188****5175 江苏省 面谈 无\"");
+			return EVENT_IGNORE;
+		}
+		tokens.push_back("无");
+		tokens.push_back("无");
+		tokens.push_back("无");
+		tokens.push_back("无");
+		tokens[10] = msg;
+		saveToCSV(tokens);
+	}
 	
 	return EVENT_BLOCK; //关于返回值说明, 见“_eventPrivateMsg”函数
 }
@@ -303,21 +344,57 @@ void clearFile()
 	remove(fileName);
 }
 
-void saveToCSV(vector<string> order)
+int CheckDir(char* Dir)
 {
+	FILE *fp = NULL;
+	char TempDir[200];
+	memset(TempDir, '\0', sizeof(TempDir));
+	sprintf(TempDir, Dir);
+	strcat(TempDir, "\\");
+	strcat(TempDir, ".temp.fortest");
+	fp = fopen(TempDir, "w");
+	if (!fp)
+	{
+		if (_mkdir(Dir) == 0)
+		{
+			return 1;//文件夹创建成功
+		}
+		else
+		{
+			return -1;//can not make a dir;
+		}
+	}
+	else
+	{
+		fclose(fp);
+	}
+	return 0;
+}
+
+void getFileName(const char* group, char* fileName ) {
 	time_t rawtime;
 	time(&rawtime);
 	char tmp[20];
 	strftime(tmp, 20, "%Y-%m-%d", localtime(&rawtime));
 	//cout << tmp << endl;
-	char fileName[100] = "data/order/";
+	strcpy(fileName, "data/order/");
 	strcat(fileName, tmp);
+	CheckDir(fileName);
+	strcat(fileName, "/");
+	strcat(fileName, group);
 	strcat(fileName, ".csv");
+}
+
+void saveToCSV(vector<string> order)
+{
+	char fileName[100];
+	int i = 0;
+	getFileName(order[0].c_str(),fileName);
+	i++;
 	ofstream file(fileName, ios::app);
-	vector<string>::iterator iter = order.begin();
-	while (iter != order.end()) {
-		file << *iter << ",";
-		iter++;
+	while (i<=10) {
+		file << order[i] << ",";
+		i++;
 	}
 	file << endl;
 	file.close();
@@ -331,18 +408,11 @@ string Trim(string& str)
 	return str;
 }
 
-vector<string> openFromCSV()
+vector<string> openFromCSV(const char* group)
 {
 	vector<string> order;
-	time_t rawtime;
-	time(&rawtime);
-	char tmp[20];
-	strftime(tmp, 20, "%Y-%m-%d", localtime(&rawtime));
-	//cout << tmp << endl;
-	char fileName[100] = "data/order/";
-	strcat(fileName, tmp);
-	strcat(fileName, ".csv");
-
+	char fileName[100];
+	getFileName(group, fileName);
 	ifstream file(fileName);
 	vector<string> orders; //声明一个字符串向量  
 	string line;
@@ -356,22 +426,17 @@ vector<string> openFromCSV()
 		order = field + ":";
 		while (getline(sin, field, ',')) //将字符串流sin中的字符读入到field字符串中，以逗号为分隔符  
 		{
-			order += " " + field;
+			order += "\n" + field;
 		}
 		orders.push_back(order); //将刚刚读取的字符串添加到向量orders中  
 	}
 	return orders;
 }
 
-void clearCSV()
+void clearCSV(const char* group)
 {
-	time_t rawtime;
-	time(&rawtime);
-	char tmp[20];
-	strftime(tmp, 20, "%Y-%m-%d", localtime(&rawtime));
-	//cout << tmp << endl;
-	char fileName[100] = "data/order/";
-	strcat(fileName, tmp);
-	strcat(fileName, ".csv");
+	char fileName[100];
+	getFileName(group, fileName);
 	remove(fileName);
 }
+
