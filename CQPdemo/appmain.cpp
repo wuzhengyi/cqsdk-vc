@@ -95,6 +95,29 @@ CQEVENT(int32_t, __eventDisable, 0)() {
 }
 
 
+char *replaceString(const char* src, char* dst)
+{
+	char* p = dst;
+	//将字符串开头的空格去除  
+	while (*src == ' ')
+		src++;
+	while (*src)
+	{
+		*p = *src;
+		p++;
+		src++;
+		if (*src == '-')
+		{
+			*p = ' ';
+			p++;
+			src++;
+		}
+	}
+	//字符串结束符  
+	*p = '\0';
+	return dst;
+}
+
 /*
 * Type=21 私聊消息
 * subType 子类型，11/来自好友 1/来自在线状态 2/来自群 3/来自讨论组
@@ -130,6 +153,66 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 	return EVENT_IGNORE;
 }
 
+//
+///*
+//* Type=2 群消息
+//*/
+//CQEVENT(int32_t, __eventGroupMsg, 36)(int32_t subType, int32_t msgId, int64_t fromGroup, int64_t fromQQ, const char *fromAnonymous, const char *msg, int32_t font) {
+//	time_t rawtime;
+//	time(&rawtime);
+//	char fileName[20];
+//	strftime(fileName, 20, "%Y-%m-%d", localtime(&rawtime));
+//	//CQ_sendGroupMsg(ac, fromGroup, fileName);	
+//	string s = msg;
+//	string buf;
+//	stringstream ss(s);  // 字符流ss 
+//	vector<string> tokens;  // vector
+//	ss >> buf;
+//	if (buf.compare("买") != 0 && buf.compare("卖") != 0) {
+//		CQ_sendGroupMsg(ac, fromGroup, "首字符不匹配\n请按照格式发送,空白项填写'无'，中间有空格。\
+//			\n\"买/卖 [型号] [电压等级] [规格] [数量] [电话] [到货地点] [价格] [备注]\"\n\
+//			例如\"买 yjv22 35v 50米 3*300 188****5175 江苏省 面谈 无\"");
+//		return EVENT_IGNORE;
+//	}
+//	if (buf.compare("卖") == 0) {
+//		tokens.push_back(to_string(fromGroup)+"卖");
+//		tokens.push_back(to_string(fromQQ));
+//		while (ss >> buf)
+//			tokens.push_back(buf);
+//		if (tokens.size() < 7 || tokens.size()>10) {
+//			CQ_sendGroupMsg(ac, fromGroup, "标签个数不匹配\n请按照格式发送,空白项填写'无'，中间有空格。\
+//			\n\"买/卖 [型号] [电压等级] [规格] [数量] [电话] [到货地点] [价格] [备注]\"\n\
+//			例如\"买 yjv22 35v 50米 3*300 188****5175 江苏省 面谈 无\"");
+//			return EVENT_IGNORE;
+//		}
+//		tokens.push_back("无");
+//		tokens.push_back("无");
+//		tokens.push_back("无");
+//		tokens.push_back("无");
+//		tokens[10] = msg;
+//		saveToCSV(tokens);
+//	}
+//	else {
+//		tokens.push_back(to_string(fromGroup));
+//		tokens.push_back(to_string(fromQQ));
+//		while (ss >> buf)
+//			tokens.push_back(buf);
+//		if (tokens.size() < 7 || tokens.size()>10) {
+//			CQ_sendGroupMsg(ac, fromGroup, "标签个数不匹配\n请按照格式发送,空白项填写'无'，中间有空格。\
+//			\n\"买/卖 [型号] [电压等级] [规格] [数量] [电话] [到货地点] [价格] [备注]\"\n\
+//			例如\"买 yjv22 35v 50米 3*300 188****5175 江苏省 面谈 无\"");
+//			return EVENT_IGNORE;
+//		}
+//		tokens.push_back("无");
+//		tokens.push_back("无");
+//		tokens.push_back("无");
+//		tokens.push_back("无");
+//		tokens[10] = msg;
+//		saveToCSV(tokens);
+//	}
+//	
+//	return EVENT_BLOCK; //关于返回值说明, 见“_eventPrivateMsg”函数
+//}
 
 /*
 * Type=2 群消息
@@ -140,54 +223,82 @@ CQEVENT(int32_t, __eventGroupMsg, 36)(int32_t subType, int32_t msgId, int64_t fr
 	char fileName[20];
 	strftime(fileName, 20, "%Y-%m-%d", localtime(&rawtime));
 	//CQ_sendGroupMsg(ac, fromGroup, fileName);	
-	string s = msg;
+	char temp[100];
+	replaceString(msg, temp);
+	string s = temp;
 	string buf;
 	stringstream ss(s);  // 字符流ss 
 	vector<string> tokens;  // vector
 	ss >> buf;
 	if (buf.compare("买") != 0 && buf.compare("卖") != 0) {
-		CQ_sendGroupMsg(ac, fromGroup, "首字符不匹配\n请按照格式发送,空白项填写'无'，中间有空格。\
-			\n\"买/卖 [型号] [电压等级] [规格] [数量] [电话] [到货地点] [价格] [备注]\"\n\
-			例如\"买 yjv22 35v 50米 3*300 188****5175 江苏省 面谈 无\"");
+		//CQ_sendGroupMsg(ac, fromGroup, "首字符不匹配\n请按照格式发送,空白项填写'无'，中间有空格。\
+		//	\n\"买/卖 [型号] [规格] [数量] [备注]\"\n\
+		//	例如\"买 yjv22/35v 50米 3*300 188****5175\"");
 		return EVENT_IGNORE;
 	}
 	if (buf.compare("卖") == 0) {
-		tokens.push_back(to_string(fromGroup)+"卖");
+		string fileName = to_string(fromGroup);
+		fileName += "供货清单";
+		tokens.push_back(fileName);
 		tokens.push_back(to_string(fromQQ));
 		while (ss >> buf)
 			tokens.push_back(buf);
-		if (tokens.size() < 7 || tokens.size()>10) {
-			CQ_sendGroupMsg(ac, fromGroup, "标签个数不匹配\n请按照格式发送,空白项填写'无'，中间有空格。\
-			\n\"买/卖 [型号] [电压等级] [规格] [数量] [电话] [到货地点] [价格] [备注]\"\n\
-			例如\"买 yjv22 35v 50米 3*300 188****5175 江苏省 面谈 无\"");
+		if (tokens.size()!=7&&tokens.size()!=6) {
+			CQ_sendGroupMsg(ac, fromGroup, "请按照格式发送,空白项填写'无'，中间有空格。\n\"买/卖 [电压伏数] [型号] [规格] [数量] [备注(可不填写)]\"\n例如\"买 yjv 22/35v 3*300 50米 有的电话联系188****5175\"");
 			return EVENT_IGNORE;
 		}
-		tokens.push_back("无");
-		tokens.push_back("无");
-		tokens.push_back("无");
-		tokens.push_back("无");
-		tokens[10] = msg;
+		tokens.push_back(msg);
+		int i = 2;
+		string order;
+		order = "我已看到你的需求，我们将马上为你调剂需求，一会将有人联系你 ，请注意查收\n";
+		//order += "QQ号：" + tokens[1] + "\n";
+		order += "型号：" + tokens[i++] + "\n";
+		order += "电压伏数：" + tokens[i++] + "\n";
+		order += "规格：" + tokens[i++] + "\n";
+		order += "数量：" + tokens[i++] + "\n";
+		if(tokens.size() == 8)
+			order += "备注：" + tokens[i++] + "\n";
+		else
+			order += "备注：无\n";
+		order += "原文：" + tokens[i++];
+		CQ_sendGroupMsg(ac, fromGroup, order.c_str());
+		order += "\nQQ：" + tokens[1];
+		CQ_sendPrivateMsg(ac, 295084056, order.c_str());
+		//CQ_sendPrivateMsg(ac, 914349145, order.c_str());
 		saveToCSV(tokens);
 	}
 	else {
-		tokens.push_back(to_string(fromGroup));
+		string fileName = to_string(fromGroup);
+		fileName += "求购清单";
+		tokens.push_back(fileName);
 		tokens.push_back(to_string(fromQQ));
 		while (ss >> buf)
 			tokens.push_back(buf);
-		if (tokens.size() < 7 || tokens.size()>10) {
-			CQ_sendGroupMsg(ac, fromGroup, "标签个数不匹配\n请按照格式发送,空白项填写'无'，中间有空格。\
-			\n\"买/卖 [型号] [电压等级] [规格] [数量] [电话] [到货地点] [价格] [备注]\"\n\
-			例如\"买 yjv22 35v 50米 3*300 188****5175 江苏省 面谈 无\"");
+		if (tokens.size() != 7 && tokens.size() != 6) {
+			CQ_sendGroupMsg(ac, fromGroup, "请按照格式发送,空白项填写'无'，中间有空格。\n\"买/卖 [电压伏数] [型号] [规格] [数量] [备注(可不填写)]\"\n例如\"买 yjv 22/35v 3*300 50米 有的电话联系188****5175\"");
 			return EVENT_IGNORE;
 		}
-		tokens.push_back("无");
-		tokens.push_back("无");
-		tokens.push_back("无");
-		tokens.push_back("无");
-		tokens[10] = msg;
+		tokens.push_back(msg);
+		int i = 2;
+		string order;
+		order = "我已看到你的需求，我们将马上为你调剂需求，一会将有人联系你 ，请注意查收\n";
+		//order += "QQ号：" + tokens[1] + "\n";
+		order += "型号：" + tokens[i++] + "\n";
+		order += "电压伏数：" + tokens[i++] + "\n";
+		order += "规格：" + tokens[i++] + "\n";
+		order += "数量：" + tokens[i++] + "\n";
+		if (tokens.size() == 8)
+			order += "备注：" + tokens[i++] + "\n";
+		else
+			order += "备注：无\n";
+		order += "原文：" + tokens[i++];
+		CQ_sendGroupMsg(ac, fromGroup, order.c_str());
+		order += "\nQQ：" + tokens[1];
+		CQ_sendPrivateMsg(ac, 295084056, order.c_str());
+		//CQ_sendPrivateMsg(ac, 914349145, order.c_str());
 		saveToCSV(tokens);
 	}
-	
+
 	return EVENT_BLOCK; //关于返回值说明, 见“_eventPrivateMsg”函数
 }
 
@@ -385,6 +496,13 @@ void getFileName(const char* group, char* fileName ) {
 	strcat(fileName, ".csv");
 }
 
+void getNowTime(char *nowTime) {
+	time_t rawtime;
+	time(&rawtime);
+	strftime(nowTime, 20, "%Y-%m-%d-%X", localtime(&rawtime));
+}
+
+//格式: 时间 QQ 型号 电压 规格 数量 备注
 void saveToCSV(vector<string> order)
 {
 	char fileName[100];
@@ -392,7 +510,10 @@ void saveToCSV(vector<string> order)
 	getFileName(order[0].c_str(),fileName);
 	i++;
 	ofstream file(fileName, ios::app);
-	while (i<=10) {
+	char nowTime[100];
+	getNowTime(nowTime);
+	file << nowTime << ",";
+	while (i < order.size()) {
 		file << order[i] << ",";
 		i++;
 	}
@@ -423,11 +544,22 @@ vector<string> openFromCSV(const char* group)
 		string field;
 		string order;
 		getline(sin, field, ',');
-		order = field + ":";
-		while (getline(sin, field, ',')) //将字符串流sin中的字符读入到field字符串中，以逗号为分隔符  
-		{
-			order += "\n" + field;
-		}
+		order = "时间：" + field + "\n";
+		getline(sin, field, ',');
+		order += "QQ号：" + field + "\n";
+		getline(sin, field, ',');
+		order += "型号：" + field + "\n";
+		getline(sin, field, ',');
+		order += "电压伏数：" + field + "\n";
+		getline(sin, field, ',');
+		order += "规格：" + field + "\n";
+		getline(sin, field, ',');
+		order += "数量：" + field + "\n";
+		getline(sin, field, ',');
+		order += "备注：" + field + "\n";
+		getline(sin, field, ',');
+		order += "原文：" + field;
+
 		orders.push_back(order); //将刚刚读取的字符串添加到向量orders中  
 	}
 	return orders;
